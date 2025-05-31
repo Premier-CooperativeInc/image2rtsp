@@ -132,7 +132,7 @@ GstCaps *Image2rtsp::gst_caps_new_from_image(const sensor_msgs::msg::Image::Shar
                                "format", G_TYPE_STRING, format->second.c_str(),
                                "width", G_TYPE_INT, msg->width,
                                "height", G_TYPE_INT, msg->height,
-                               "framerate", GST_TYPE_FRACTION, stoi(framerate), 1,
+                               "framerate", GST_TYPE_FRACTION, framerate, 1,
                                nullptr);
 }
 
@@ -181,9 +181,9 @@ void Image2rtsp::compressed_topic_callback(const sensor_msgs::msg::CompressedIma
     // Determine the GStreamer caps
     std::string gst_format;
     switch (img.type()) {
-        case CV_8UC3: gst_format = "RGB"; break; // RGB images
-        case CV_8UC4: gst_format = "RGBA"; break; // RGBA images
-        case CV_8UC1: gst_format = "GRAY8"; break; // Grayscale images
+        case CV_8UC3: gst_format = "BGR"; break;    // BGR images
+        case CV_8UC4: gst_format = "RGBA"; break;   // RGBA images
+        case CV_8UC1: gst_format = "GRAY8"; break;  // Grayscale images
         default:
             RCLCPP_ERROR(this->get_logger(), "Unsupported image type");
             return;
@@ -193,7 +193,7 @@ void Image2rtsp::compressed_topic_callback(const sensor_msgs::msg::CompressedIma
                                         "format", G_TYPE_STRING, gst_format.c_str(),
                                         "width", G_TYPE_INT, img.cols,
                                         "height", G_TYPE_INT, img.rows,
-                                        "framerate", GST_TYPE_FRACTION, stoi(framerate), 1,
+                                        "framerate", GST_TYPE_FRACTION, framerate, 1,
                                         nullptr);
 
     // Set caps on appsrc
