@@ -66,6 +66,7 @@ void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline, Gst
     g_object_unref(mounts);
 }
 
+
 static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, GstElement **appsrc){
     if(appsrc){
         GstElement *pipeline = gst_rtsp_media_get_element(media);
@@ -154,23 +155,26 @@ static gboolean session_cleanup(Image2rtsp *node, rclcpp::Logger logger, gboolea
     return TRUE;
 }
 
-void Image2rtsp::topic_callback(const sensor_msgs::msg::Image::SharedPtr msg){
+void Image2rtsp::topic_callback(const sensor_msgs::msg::Image::SharedPtr msg, Stream* s){
     GstBuffer *buf;
     GstCaps *caps; // image properties. see return of Image2rtsp::gst_caps_new_from_image
     char *gst_type, *gst_format = (char *)"";
-    if (appsrc != NULL){
+    if (s && s->appsrc){
         // Set caps from message
         caps = gst_caps_new_from_image(msg);
-        gst_app_src_set_caps(appsrc, caps);
+        gst_app_src_set_caps(s->appsrc , caps);
         buf = gst_buffer_new_allocate(nullptr, msg->data.size(), nullptr);
         gst_buffer_fill(buf, 0, msg->data.data(), msg->data.size());
         GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_LIVE);
-        gst_app_src_push_buffer(appsrc, buf);
+        gst_app_src_push_buffer(s->appsrc , buf);
+        // unref caps
+        // gst_caps_unref(caps);
     }
 }
 
-void Image2rtsp::compressed_topic_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg){
-    if (appsrc == NULL) return;
+
+void Image2rtsp::compressed_topic_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg, Stream* s){
+    if (s && s->appsrc) return;
     // Decompress the image
     cv::Mat img = cv::imdecode(cv::Mat(msg->data), cv::IMREAD_UNCHANGED);
     if (img.empty()) {
@@ -197,7 +201,7 @@ void Image2rtsp::compressed_topic_callback(const sensor_msgs::msg::CompressedIma
                                         nullptr);
 
     // Set caps on appsrc
-    gst_app_src_set_caps(appsrc, caps);
+    gst_app_src_set_caps(s->appsrc, caps);
     gst_caps_unref(caps);
 
     // Create a GstBuffer and fill it with the image data
@@ -206,5 +210,5 @@ void Image2rtsp::compressed_topic_callback(const sensor_msgs::msg::CompressedIma
     GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_LIVE);
 
     // Push the buffer to GStreamer
-    gst_app_src_push_buffer(appsrc, buf);
+    gst_app_src_push_buffer(s->appsrc, buf);
 }

@@ -33,13 +33,18 @@ sudo apt-get install libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1
       ```bashrc
       gedit ~/ros2_ws/src/image2rtsp/config/parameters.yaml
       ```
+
 # Example ROS2 Image topic stream
-    # If the source is a ros2 topic (default case)
-      compressed:       False
-      topic:            "color/image_raw"
+Multi topic stream has been tested on ROS2 Jazzy with Intel RealSense D555 connected through Ethernet.
+```
+/image2rtsp:
+   ros__parameters:
+
+      # If the source is a ros2 topic (default case)
+      compressed:       [False,False,False]
+      topic:            ["/topic1","/topic2","/topic3"]
       default_pipeline: |
-                        ( appsrc name=imagesrc do-timestamp=true min-latency=0 
-                          max-latency=0 max-bytes=1000 is-live=true !
+                        ( appsrc name=imagesrc do-timestamp=true min-latency=0 max-latency=0 max-bytes=1000 is-live=true !
                           videoconvert !
                           videoscale !
                           video/x-raw, framerate=30/1, width=640, height=480 !
@@ -49,29 +54,27 @@ sudo apt-get install libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1
 
       # Notice: The framerate setting does not affect the RTSP stream — it entirely depends on the ros2 topic frequency. 
       # It is included in the pipeline and code for structural reasons. You can likely remove it from the pipeline without impacting the package's behavior.
-
-
       # If camera serves as a source
       camera:           False      
       camera_pipeline:  |
                         ( v4l2src device=/dev/video0 !
-                          videoconvert !
-                          videoscale !
-                          video/x-raw, framerate=30/1, width=640, height=480 !
-                          x264enc tune=zerolatency bitrate=500 key-int-max=30 !
-                          video/x-h264, profile=baseline !
-                          rtph264pay name=pay0 pt=96 )
+                           videoconvert !
+                           videoscale !
+                           video/x-raw, framerate=30/1, width=640, height=480 !
+                           x264enc tune=zerolatency bitrate=500 key-int-max=30 !
+                           video/x-h264, profile=baseline !
+                           rtph264pay name=pay0 pt=96 )
 
       # Notice: Here the framerate might be set to the camera framerate, otherwise "503 Service Unavailable" error will appear.
 
       # RTSP setup
-      mountpoint:       "/back"
+      mountpoint:       ["/1","/2","/3"]
       port:             "8554"
-      local_only:       True     # True = rtsp://127.0.0.1:portAndMountpoint (The stream is accessible only from the local machine)
+      local_only:       False     # True = rtsp://127.0.0.1:portAndMountpoint (The stream is accessible only from the local machine)
                                  # False = rtsp://0.0.0.0:portAndMountpoint (The stream is accessible from the outside) 
                                  # For example, to access the stream running on the machine with IP = 192.168.20.20,
                                  # use rtsp://192.186.20.20:portAndMountpoint
-
+```
   - Save your configuration and navigate to `ros2_ws` colcon root, source and build the package:
       ```bashrc
       cd ~/ros2_ws/

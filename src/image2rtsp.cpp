@@ -9,12 +9,12 @@ using std::placeholders::_1;
 
 Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     // Declare and get the parameters
-    this->declare_parameter("topic",        "/color/image_raw");
-    this->declare_parameter("mountpoint",   "/back");
+    this->declare_parameter("topic",        topics);
+    this->declare_parameter("mountpoint",   mountpoints);
     this->declare_parameter("port",         "8554");
     this->declare_parameter("local_only",   true);
     this->declare_parameter("camera",       false);
-    this->declare_parameter("compressed",   false);
+    this->declare_parameter("compressed",   is_compressed);
 
     this->declare_parameter("default_pipeline",   R"(
                                                     ( appsrc name=imagesrc do-timestamp=true min-latency=0 max-latency=0 max-bytes=1000 is-live=true !
@@ -36,40 +36,79 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
                                                     rtph264pay name=pay0 pt=96 )
                                                     )");
 
-    topic               = this->get_parameter("topic").as_string();
-    mountpoint          = this->get_parameter("mountpoint").as_string();
-    port                = this->get_parameter("port").as_string();
-    local_only          = this->get_parameter("local_only").as_bool();
-    camera              = this->get_parameter("camera").as_bool();
-    compressed          = this->get_parameter("compressed").as_bool();
-    default_pipeline    = this->get_parameter("default_pipeline").as_string();
-    camera_pipeline     = this->get_parameter("camera_pipeline").as_string();
+    topics           = this->get_parameter("topic").as_string_array();
+    mountpoints      = this->get_parameter("mountpoint").as_string_array();
+    port             = this->get_parameter("port").as_string();
+    local_only       = this->get_parameter("local_only").as_bool();
+    camera           = this->get_parameter("camera").as_bool();
+    is_compressed    = this->get_parameter("compressed").as_bool_array();
+    default_pipeline = this->get_parameter("default_pipeline").as_string();
+    camera_pipeline  = this->get_parameter("camera_pipeline").as_string();
 
-    // Start the subscription
-    if (camera == false){
-        if (compressed == false){
-            subscription_ = this->create_subscription<sensor_msgs::msg::Image>(topic, 10, std::bind(&Image2rtsp::topic_callback, this, _1));
-            RCLCPP_INFO(this->get_logger(), "Subscribing to sensor_msgs::msg::Image");
-        }
-        else {
-            subscription_compressed_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(topic, 10, std::bind(&Image2rtsp::compressed_topic_callback, this, _1));
-            RCLCPP_INFO(this->get_logger(), "Subscribing to sensor_msgs::msg::CompressedImage");
+    // Failsafe
+    if (topics.size() != mountpoints.size() || topics.size() != is_compressed.size()) {
+        throw std::runtime_error("topic / mountpoint / compressed parameter sizes do not match");
+    }
+
+    // Iterating through all parameters and creating a struct for all streams
+    streams_.clear();
+    for (size_t i = 0; i < topics.size(); i++) {
+        
+        Stream s;
+        s.topic = topics[i];
+        s.mountpoint = mountpoints[i];
+        s.appsrc = NULL;
+        s.compressed = is_compressed[i];
+        streams_.push_back(s);
+    }
+
+    if (!camera) {
+        for (Stream &s : streams_) {
+
+            if (!s.compressed) {
+                s.sub = this->create_subscription<sensor_msgs::msg::Image>(
+                    s.topic,
+                    10,
+                    [this, &s](sensor_msgs::msg::Image::SharedPtr msg) {
+                        this->topic_callback(msg, &s);
+                    });
+
+                RCLCPP_INFO(this->get_logger(),
+                            "Subscribed to Image topic: %s",
+                            s.topic.c_str());
+            }
+            else {
+                s.sub_compressed =
+                    this->create_subscription<sensor_msgs::msg::CompressedImage>(
+                        s.topic,
+                        10,
+                        [this, &s](sensor_msgs::msg::CompressedImage::SharedPtr msg) {
+                            this->compressed_topic_callback(msg, &s);
+                        });
+
+                RCLCPP_INFO(this->get_logger(),
+                            "Subscribed to CompressedImage topic: %s",
+                            s.topic.c_str());
+            }
         }
     }
     else {
         RCLCPP_INFO(this->get_logger(), "Trying to access camera device");
     }
 
-    // Start the RTSP server
-    video_mainloop_start();
-    rtsp_server = rtsp_server_create(port, local_only);
-    appsrc = NULL;
 
+    // Start the RTSP server
     pipeline = camera ? camera_pipeline : default_pipeline;
     framerate = extract_framerate(pipeline, 30);
-    rtsp_server_add_url(mountpoint.c_str(), pipeline.c_str(), camera ? nullptr : (GstElement **)&appsrc);
 
-    RCLCPP_INFO(this->get_logger(), "Stream available at rtsp://%s:%s%s", gst_rtsp_server_get_address(rtsp_server), port.c_str(), mountpoint.c_str());
+    video_mainloop_start();
+    rtsp_server = rtsp_server_create(port, local_only);
+    for (Stream &s : streams_) {
+        s.appsrc = NULL;
+        rtsp_server_add_url(s.mountpoint.c_str(), pipeline.c_str(), camera ? nullptr : (GstElement **)&s.appsrc);
+        RCLCPP_INFO(this->get_logger(), "Stream available at rtsp://%s:%s%s", gst_rtsp_server_get_address(rtsp_server), port.c_str(), s.mountpoint.c_str());
+
+    }
 }
 
 uint Image2rtsp::extract_framerate(const std::string& pipeline, uint default_framerate = 30) {
