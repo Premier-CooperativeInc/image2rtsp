@@ -2,15 +2,15 @@
    ros__parameters:
 
       # If the source is a ros2 topic (default case)
-      compressed:       [False,False,False]
-      topic:            ["/topic1","/topic2","/topic3"]
+      compressed:       [False, False]
+      topic:            ["/camera/camera/color/image_raw","/camera/object/vehicle"]
       default_pipeline: |
                         ( appsrc name=imagesrc do-timestamp=true min-latency=0 max-latency=0 max-bytes=1000 is-live=true !
                           videoconvert !
                           videoscale !
-                          video/x-raw, framerate=30/1, width=640, height=480 !
-                          x264enc tune=zerolatency bitrate=500 key-int-max=30 !
-                          video/x-h264, profile=baseline !
+                          video/x-raw, framerate=30/1, width=1280, height=720 !
+                          x264enc tune=zerolatency bitrate=3000 key-int-max=30 !
+                          video/x-h264, profile=main !
                           rtph264pay name=pay0 pt=96 )
 
       # Notice: The framerate setting does not affect the RTSP stream — it entirely depends on the ros2 topic frequency. 
@@ -29,8 +29,11 @@
       # Notice: Here the framerate might be set to the camera framerate, otherwise "503 Service Unavailable" error will appear.
 
       # RTSP setup
-      mountpoint:       ["/1","/2","/3"]
+      mountpoint:       ["/rgb","/vehicle"]
       port:             "8554"
+      password_protect: True
+      username: "Test"
+      password: "123"
       local_only:       False     # True = rtsp://127.0.0.1:portAndMountpoint (The stream is accessible only from the local machine)
                                  # False = rtsp://0.0.0.0:portAndMountpoint (The stream is accessible from the outside) 
                                  # For example, to access the stream running on the machine with IP = 192.168.20.20,

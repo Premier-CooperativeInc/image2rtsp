@@ -21,6 +21,7 @@ void Image2rtsp::video_mainloop_start(){
     pthread_create(&tloop, NULL, &mainloop, NULL);
 }
 
+
 GstRTSPServer *Image2rtsp::rtsp_server_create(const std::string &port, const bool local_only){
     GstRTSPServer *server;
 
@@ -38,9 +39,40 @@ GstRTSPServer *Image2rtsp::rtsp_server_create(const std::string &port, const boo
     return server;
 }
 
+void Image2rtsp::setup_auth(const char* username, const char* password)
+{
+    GstRTSPAuth *auth;
+    GstRTSPToken *token;
+    gchar *basic;
+
+    /* create auth object */
+    auth = gst_rtsp_auth_new();
+
+    /* create token with media factory role */
+    token = gst_rtsp_token_new(
+        GST_RTSP_TOKEN_MEDIA_FACTORY_ROLE, G_TYPE_STRING, "user",
+        NULL);
+
+    /* create basic auth string */
+    basic = gst_rtsp_auth_make_basic(username, password);
+
+    /* add user */
+    gst_rtsp_auth_add_basic(auth, basic, token);
+
+    g_free(basic);
+    gst_rtsp_token_unref(token);
+
+    /* attach auth to server */
+    gst_rtsp_server_set_auth(rtsp_server, auth);
+
+    g_object_unref(auth);
+}
+
+
 void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline, GstElement **appsrc){
     GstRTSPMountPoints *mounts;
     GstRTSPMediaFactory *factory;
+    GstRTSPPermissions *permissions; ////// security
 
     /* get the mount points for this server, every server has a default object
      * that be used to map uri mount points to media factories */
@@ -58,6 +90,18 @@ void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline, Gst
     g_signal_connect(factory, "media-configure", (GCallback)media_configure, appsrc);
 
     gst_rtsp_media_factory_set_shared(factory, TRUE);
+
+    // Adding permissions
+    permissions = gst_rtsp_permissions_new();
+    gst_rtsp_permissions_add_role(permissions, "user",
+        GST_RTSP_PERM_MEDIA_FACTORY_ACCESS, G_TYPE_BOOLEAN, TRUE,
+        GST_RTSP_PERM_MEDIA_FACTORY_CONSTRUCT, G_TYPE_BOOLEAN, TRUE,
+        NULL);
+
+    gst_rtsp_media_factory_set_permissions(factory, permissions);
+    gst_rtsp_permissions_unref(permissions);
+
+    ///////////
 
     /* attach the factory to the url */
     gst_rtsp_mount_points_add_factory(mounts, url, factory);

@@ -37,11 +37,15 @@ private:
     string pipeline;
     string default_pipeline;
     string camera_pipeline;
+    string username;
+    string password;
+    bool password_protect;
     uint framerate;
     bool local_only;
     bool camera;
 
     void video_mainloop_start();
+    void setup_auth(const char* username, const char* password);
     void rtsp_server_add_url(const char *url, const char *sPipeline, GstElement **appsrc);
     void topic_callback(const sensor_msgs::msg::Image::SharedPtr msg, Stream* stream);
     void compressed_topic_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg, Stream* stream);

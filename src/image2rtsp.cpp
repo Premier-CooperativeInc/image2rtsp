@@ -15,6 +15,9 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     this->declare_parameter("local_only",   true);
     this->declare_parameter("camera",       false);
     this->declare_parameter("compressed",   is_compressed);
+    this->declare_parameter("username",   "test");
+    this->declare_parameter("password",   "123");
+    this->declare_parameter("password_protect",   false);
 
     this->declare_parameter("default_pipeline",   R"(
                                                     ( appsrc name=imagesrc do-timestamp=true min-latency=0 max-latency=0 max-bytes=1000 is-live=true !
@@ -42,6 +45,9 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     local_only       = this->get_parameter("local_only").as_bool();
     camera           = this->get_parameter("camera").as_bool();
     is_compressed    = this->get_parameter("compressed").as_bool_array();
+    username         = this->get_parameter("username").as_string();
+    password         = this->get_parameter("password").as_string();
+    password_protect = this->get_parameter("password_protect").as_bool();
     default_pipeline = this->get_parameter("default_pipeline").as_string();
     camera_pipeline  = this->get_parameter("camera_pipeline").as_string();
 
@@ -103,6 +109,9 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
 
     video_mainloop_start();
     rtsp_server = rtsp_server_create(port, local_only);
+    if (password_protect){
+        setup_auth(username.c_str(), password.c_str());  
+    }
     for (Stream &s : streams_) {
         s.appsrc = NULL;
         rtsp_server_add_url(s.mountpoint.c_str(), pipeline.c_str(), camera ? nullptr : (GstElement **)&s.appsrc);
