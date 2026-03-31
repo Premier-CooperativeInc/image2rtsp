@@ -18,7 +18,7 @@ def generate_launch_description():
 
     # LaunchConfiguration holds the path
     config_dir = LaunchConfiguration('config_dir')
-    parameters_file = os.path.join(default_config_dir, 'parameters.yaml')  # fallback
+    parameters_file = PathJoinSubstitution([config_dir, 'parameters.yaml'])
 
     stream_node = Node(
         package='image2rtsp',
